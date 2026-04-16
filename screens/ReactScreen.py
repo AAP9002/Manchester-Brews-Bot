@@ -3,6 +3,7 @@ from adafruit_display_shapes.roundrect import RoundRect
 import displayio
 import time as system_time
 from components.TouchButton import TouchButton
+from components.WifiIndicator import WifiIndicator
 import terminalio
 import os
 from utils.SendRequest import SendRequest
@@ -24,6 +25,7 @@ class ReactScreen:
         self.BackButton = None
         self.reactionButtons = []
         self.status_label = None
+        self.wifi_indicator = None
         self.build()
         self.setDefaultStatus()
 
@@ -53,6 +55,8 @@ class ReactScreen:
         self.status_label.y = 225
         self.status_label.scale = 2
         self.screen_group.append(self.status_label)
+
+        self.wifi_indicator = WifiIndicator(266, 222, self.screen_group)
 
         if self.app_state.get("last_brew_time") is None:
             you_need_to_brew_label = label.Label(terminalio.FONT, text="You must Broadcast a brew", scale=2, color=0xFF0000)
@@ -95,6 +99,11 @@ class ReactScreen:
         if self.BackButton.isPressed(touch):
             self.BackButton.runCallback()
             return
+        if not self.app_state.get("wifi_connected", False):
+            self.status_label.text = "No WiFi connection!"
+            self.status_label.color = 0xFF0000
+            return
+        self.status_label.color = 0x00FF00
         self.status_label.text = "Sending..."
         for button in self.reactionButtons:
             if button.isPressed(touch):

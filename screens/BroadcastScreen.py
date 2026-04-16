@@ -3,6 +3,7 @@ from adafruit_display_shapes.roundrect import RoundRect
 import displayio
 import time as system_time
 from components.TouchButton import TouchButton
+from components.WifiIndicator import WifiIndicator
 import terminalio
 import os
 from utils.SendRequest import SendRequest
@@ -29,6 +30,7 @@ class BroadcastScreen:
         self.BrewingButton = None
         self.BackButton = None
         self.status_label = None
+        self.wifi_indicator = None
         self.build()
         self.setDefaultStatus()
 
@@ -66,6 +68,8 @@ class BroadcastScreen:
         button_label_done.y = 64
         self.screen_group.append(button_label_done)
 
+        self.wifi_indicator = WifiIndicator(266, 222, self.screen_group)
+
     def setDefaultStatus(self):
         self.status_label.text = "Press a button to send"
 
@@ -85,6 +89,11 @@ class BroadcastScreen:
         if self.BackButton.isPressed(touch):
             self.BackButton.runCallback()
             return
+        if not self.app_state.get("wifi_connected", False):
+            self.status_label.text = "No WiFi connection!"
+            self.status_label.color = 0xFF0000
+            return
+        self.status_label.color = 0x00FF00
         self.status_label.text = "Sending..."
         if self.DoneBrewingButton.isPressed(touch):
             self.app_state["last_brew_time"] = system_time.monotonic()
