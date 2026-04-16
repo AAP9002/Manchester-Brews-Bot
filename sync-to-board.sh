@@ -5,6 +5,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
 CIRCUITPY_DIR="/Volumes/CIRCUITPY"
 
+echo "Building/Validating Python files..."
+
+# Check syntax of all Python files
+find "$PROJECT_DIR" -name "*.py" -not -path "*/\.*" -not -path "*/.git/*" | while read -r file; do
+    python3 -m py_compile "$file" 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Syntax error in $file"
+        exit 1
+    fi
+done
+
+echo "Build successful!"
 echo "Syncing to CIRCUITPY volume..."
 
 # Check if CIRCUITPY is mounted
