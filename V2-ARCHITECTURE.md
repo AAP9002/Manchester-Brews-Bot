@@ -98,11 +98,22 @@ Replaces the `if app_state["current_screen"] == "..."` chains. Screens hold a na
 
 ### `utils/touch.py` (new)
 
-```
-def normalize(raw_touch):  # (x, y) → (tx, ty) with 90° rotation applied
-```
+Two single-source-of-truth responsibilities:
 
-The single place this transform lives. Used by `CardButton.is_pressed`, `TouchButton.is_pressed`, and any future hit-tests.
+1. **Coordinate normalization** — convert raw CST8xx touches to display coordinates.
+   ```
+   def normalize(raw_touch):  # (x, y, ...) → (tx, ty) with 90° rotation applied
+   ```
+
+2. **Edge-triggered touch detection** — a single physical press fires the callback once, not every loop iteration the finger is held down.
+   ```
+   class TouchTracker:
+       def __init__(self, ctp): ...
+       def poll(self) -> Optional[tuple]:
+           """Return the normalized touch on the rising edge of a press, else None."""
+   ```
+
+The main loop calls `tracker.poll()` once per iteration and forwards any returned touch to `navigator.active.handle_touch(...)`. Used by `CardButton.is_pressed`, `TouchButton.is_pressed`, and any future hit-tests.
 
 ### `utils/config.py` (new)
 
@@ -114,7 +125,9 @@ COLOURS  = { "blue": 0x2563EB, "red": 0xEF4444, "teal": 0x14B8A6,
              "success": 0x16A34A, "dark": 0x111827, "white": 0xFFFFFF }
 TIMING   = { "success_dismiss": 2.5, "wifi_poll": 5.0, "tap_debounce": 0.3 }
 MESSAGES = {
-    "low_on_beans": ("Alex has been peer-pressured effectively...",
+    # The {name} placeholder is filled at runtime from env var LOW_BEANS_PERSON
+    # (default "Someone" if unset).
+    "low_on_beans": ("{name} has been peer-pressured effectively...",
                      "beans should be with you shortly"),
     "log_intake_default": "Cup logged.",
     "brewing": "Brewing announced",
@@ -130,6 +143,19 @@ IMAGES   = {
     "back_icon":       "/images/back.bmp",
 }
 ```
+
+### `utils/layout.py` (new)
+
+Text and layout primitives used by every screen. No state, no I/O. Patterns ported (with light cleanup) from a sister CircuitPython codebase that proved them out:
+
+- `CHAR_BASE_WIDTH = 5`, `CHAR_BASE_HEIGHT = 8`, `CHAR_BASE_GAP = 1` (terminalio.FONT metrics)
+- `get_text_width(text, scale)` — width in pixels using the font metrics above
+- `make_text_label(text, scale, color, x, y)` — wrap `label.Label` with the project's anchoring rules; supports `"center"` as a sentinel for the x or y argument
+- `resolve_text_position(value, parent_size, offset)` — handle the `"center"` sentinel
+- `truncate_to_width(text, scale, max_width)` — ellipsis truncation if too long
+- `split_title_lines(text, scale, max_width)` — wrap into up to N lines; final line gets ellipsis truncation if needed
+
+Replaces the hand-coded position arithmetic strewn through v1 (`x=25, y=85` magic numbers).
 
 ### `utils/SendRequest.py` (refactor)
 
@@ -151,15 +177,22 @@ CardButton(group, x, y, width, height,
            icon_path, label, border_colour,
            callback, fill_colour=None)
     .is_pressed(raw_touch) -> bool   # uses utils/touch.normalize
-    .fire()                          # callback always a callable; never invoked at construction
+    .fire()                          # callback always callable; never invoked at construction
+    .flash(now)                      # set non-blocking press feedback timer
+    .tick(now)                       # called by parent screen; clears flash when expired
 ```
 
-Renders: optional fill `RoundRect`, border `RoundRect` in `border_colour`, centred BMP icon, label text underneath. Hit-test uses the full card bounds.
+Renders: optional fill `RoundRect`, border `RoundRect` in `border_colour`, centred BMP icon, label text underneath using `utils/layout` primitives. Hit-test uses the full card bounds.
+
+Visual press feedback uses a timestamp model — `flash(now)` sets `_flash_until = now + 0.18`; the parent screen's `tick(now)` calls `card.tick(now)` which restores the resting fill once `now >= _flash_until`. **No `time.sleep` for feedback** (v1 used 2-second blocking sleeps which froze the UI and dropped touch input).
+
+**Tap debounce.** `fire()` gates its callback by `TIMING["tap_debounce"]` (300 ms) — a button cannot fire twice within that window. Edge-triggered touch already prevents the same physical press from firing twice; this protects against deliberately-rapid sequential presses (especially the back button).
 
 ### `components/TouchButton.py` (keep, light refactor)
 
 - Drop the duplicated rotation logic; call `touch.normalize`
 - Constructor accepts `callback` only as a callable; rely on lambdas at call sites
+- `fire()` gates the callback by `TIMING["tap_debounce"]` (same as CardButton)
 - Used for the back button on `AnnouncementScreen` and any future BMP-only buttons
 
 ### `components/WifiIndicator.py` (keep, defer)
@@ -243,17 +276,28 @@ ANY  ─[wifi drop]─────────→ no_connection ─[wifi up]→ 
 ## 7. Touch input model
 
 ```
-raw_touch from CST8xx
+ctp.touched (every loop iter)
         │
         ▼
+TouchTracker.poll()        ← rising-edge: returns a touch only on the
+        │                    transition from "not touching" to "touching"
+        ▼
 utils/touch.normalize() → (tx, ty)
+        │
+        ▼
+navigator.active.handle_touch((tx, ty))
         │
         ▼
 component.is_pressed(raw)   ← every component normalizes once
         │
         ▼
 component.fire() → callback (always callable; never invoked at construction)
+        │
+        ▼
+component.flash(now)        ← non-blocking press feedback; cleared on tick
 ```
+
+Edge-triggered detection prevents a single physical press from firing the same callback dozens of times during a frame. v1's continuous-poll model made that a real risk, masked only by the blocking sleeps inside screen handlers — which v2 removes.
 
 ---
 
@@ -302,6 +346,7 @@ utils/
   Navigator.py
   SendRequest.py
   CoffeeCounter.py
+  layout.py
   touch.py
   config.py
 
@@ -321,11 +366,12 @@ Phases are ordered so the device boots into a working state at the end of each. 
 ### Phase 1 — Foundation (no behaviour change)
 1. Create `.gitignore` (exclude `settings.toml`, `__pycache__`, `boot_out.txt`)
 2. Create `settings.example.toml` with placeholder values
-3. Create `utils/touch.py` with `normalize()`
+3. Create `utils/touch.py` with `normalize()` and `TouchTracker`
 4. Create `utils/config.py` (colours, timing, messages, image paths)
-5. Refactor `components/TouchButton.py` to call `touch.normalize`
-6. Refactor `utils/SendRequest.py` to take `AppState` via constructor; return `(ok, body)`
-7. Update `code.py` and existing screens to construct `SendRequest` instance and adapt to the new return shape
+5. Create `utils/layout.py` (text + layout primitives)
+6. Refactor `components/TouchButton.py` to call `touch.normalize`
+7. Refactor `utils/SendRequest.py` to take `AppState` via constructor; return `(ok, body)`
+8. Update `code.py` and existing screens to construct `SendRequest` instance and adapt to the new return shape
    - **Verify on-device: v1 still works end-to-end.**
 
 ### Phase 2 — Components
@@ -361,8 +407,15 @@ Phases are ordered so the device boots into a working state at the end of each. 
 
 ---
 
-## 12. Open questions
+## 12. Resolved decisions
 
-- New card-icon BMPs are not yet in `/images` — exports needed for: bell-on-cup (Send announcement), low-beans, log-intake bar chart
-- "Alex" in the Low-on-beans message — hard-code or expose as `LOW_BEANS_PERSON` env var in `settings.toml`?
-- Does the back button on `AnnouncementScreen` need its own debounce, or is the existing `TouchButton` press model sufficient?
+- **Card-icon BMPs (Q1):** not yet exported. P4.2 ships text-only cards via `CardButton`'s missing-BMP fallback; BMPs drop in later as a no-code change.
+- **Low-on-beans person name (Q2):** **configurable** via `LOW_BEANS_PERSON` env var in `settings.toml`. `MESSAGES["low_on_beans"]` carries a `{name}` placeholder; `HomeScreen` formats it at runtime, defaulting to `"Someone"` if the env var is unset.
+- **Tap debounce (Q3):** **300 ms debounce applied at the button level** for both `TouchButton.fire` and `CardButton.fire` via `TIMING["tap_debounce"]`. Belt-and-braces protection on top of edge-triggered detection.
+- **WifiIndicator placement (Q4):** **deferred.** v2 communicates connectivity via `NoConnectionScreen`; the standalone indicator stays dormant until a future pass.
+
+---
+
+## 13. Borrowed patterns (provenance)
+
+`utils/layout.py`, `TouchTracker`, and the non-blocking flash model in `CardButton` were lifted (with modifications) from a sister CircuitPython codebase that targets the same hardware family. Borrowed for code-quality reasons only — none of the borrowed code carries new functionality. **Not borrowed**: idle/sleep mode, top-of-screen status bar with clock, NTP sync, JSON state persistence — all out of scope for v2.
