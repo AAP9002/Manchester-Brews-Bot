@@ -142,6 +142,7 @@ A commit should answer **one** question. If the diff spans multiple answers, spl
 - ❌ Don't rewrite history that has been pushed without explicit confirmation.
 - ❌ Don't commit commented-out code or `print()` debug lines — remove them first.
 - ❌ Don't mix "what" and "why" in the subject. The subject is the what; the body is the why.
+- ❌ Don't add a `Co-Authored-By: Claude …` trailer or any other AI-attribution line to commit messages. Author the commit as the user.
 
 ## Sub-task sizing rule of thumb
 
