@@ -4,12 +4,18 @@ CIRCUITPY="/Volumes/CIRCUITPY"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 POLL_INTERVAL=1
 
+PATHS=(
+  "$SCRIPT_DIR/code.py"
+  "$SCRIPT_DIR/settings.toml"
+  "$SCRIPT_DIR/components"
+  "$SCRIPT_DIR/screens"
+  "$SCRIPT_DIR/utils"
+  "$SCRIPT_DIR/images"
+  "$SCRIPT_DIR/lib"
+)
+
 latest_mtime() {
-  find "$SCRIPT_DIR/code.py" \
-       "$SCRIPT_DIR/components" \
-       "$SCRIPT_DIR/screens" \
-       "$SCRIPT_DIR/utils" \
-       -type f 2>/dev/null \
+  find "${PATHS[@]}" -type f -not -path '*/__pycache__/*' 2>/dev/null \
   | xargs stat -f %m 2>/dev/null \
   | sort -n \
   | tail -1
@@ -21,18 +27,13 @@ deploy() {
     return
   fi
   echo -n "[$(date +%H:%M:%S)] Deploying... "
-  rsync -a --exclude='__pycache__/' \
-    "$SCRIPT_DIR/code.py" \
-    "$SCRIPT_DIR/components" \
-    "$SCRIPT_DIR/screens" \
-    "$SCRIPT_DIR/utils" \
-    "$SCRIPT_DIR/images" \
-    "$SCRIPT_DIR/lib" \
+  rsync -a --delete --exclude='__pycache__/' \
+    "${PATHS[@]}" \
     "$CIRCUITPY/"
   echo "done"
 }
 
-echo "Watching code.py, components/, screens/, utils/ (polling every ${POLL_INTERVAL}s)"
+echo "Watching code.py, settings.toml, components/, screens/, utils/, images/, lib/ (polling every ${POLL_INTERVAL}s)"
 echo "Ctrl+C to stop"
 echo ""
 
