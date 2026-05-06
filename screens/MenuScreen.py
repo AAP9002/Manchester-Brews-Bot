@@ -8,6 +8,7 @@ import terminalio
 import random
 import os
 import microcontroller
+from utils.config import MESSAGES
 
 class MenuScreen:
     def __init__(self, app_state, send_request, coffee_counter, navigator=None):
@@ -217,35 +218,15 @@ class MenuScreen:
         return (bx - pad) <= tx <= (bx + bw + pad) and (by - pad) <= ty <= (by + bh + pad)
 
     def sendLowBeansAlert(self):
-        webhook = os.getenv("SEND_MESSAGE_SLACK_WEBHOOK")
-        if not webhook:
-            self.status_label.text = "No webhook set!"
-            self.status_label.color = 0xFF0000
+        # SMOKE TEST P4.1: navigate to SuccessScreen instead of HTTP call.
+        if self._navigator is None:
             return
-        self.bean_btn_bg.fill = 0x440000
-        self.bean_btn_icon.color = 0x666600
-        self.bean_btn_label.color = 0x888888
-        self.bean_btn_label2.color = 0x888888
-        self.status_label.color = 0xFF6666
-        self.status_label.text = "Sending bean alert..."
-        bean_emoji = random.choice([":bean:", ":noot_like_this:", ":comfy-panic:", ":dont-panic:"])
-        payload = {"messageContent": bean_emoji + " Running low on coffee beans!"}
-        try:
-            ok, body = self._send.post(webhook, payload)
-            if ok:
-                self.status_label.text = "Bean alert sent!"
-            else:
-                print("[MenuScreen] low-beans webhook failed")
-                self.status_label.text = "Send failed!"
-        except Exception as e:
-            print("[MenuScreen] low-beans send error: " + str(e))
-            self.status_label.text = "Send failed!"
-        self.bean_btn_bg.fill = 0x8B0000
-        self.bean_btn_icon.color = 0xFFFF00
-        self.bean_btn_label.color = 0xFFFFFF
-        self.bean_btn_label2.color = 0xFFFFFF
-        self.status_label.color = 0x00FF00
-        system_time.sleep(1.5)
+        name = os.getenv("LOW_BEANS_PERSON") or "Someone"
+        subtitle, main = MESSAGES["low_on_beans"]
+        self._navigator.navigate("success", {
+            "message": (subtitle.format(name=name), main),
+            "return_to": "menu",
+        })
 
     def isPlusOnePressed(self, touch):
         # touch is already normalized (tx, ty) — see is_button_pressed docstring.

@@ -6,6 +6,7 @@ from components.TouchButton import TouchButton
 from components.WifiIndicator import WifiIndicator
 import terminalio
 import os
+from utils.config import IMAGES
 
 send_message_webhook = os.getenv("SEND_MESSAGE_SLACK_WEBHOOK")
 
@@ -24,20 +25,24 @@ class BroadcastScreen:
         self.setDefaultStatus()
 
     def send_coffee_brewing_message(self):
-        payload = {
-            "messageContent": ":coffee-loading:"
-        }
-        ok, body = self._send.post(send_message_webhook, payload)
-        if not ok:
-            print("[BroadcastScreen] brewing webhook failed")
+        # SMOKE TEST P4.1: navigate to SuccessScreen with brewing BMP.
+        if self._navigator is None:
+            return
+        self._navigator.navigate("success", {
+            "message": "Brewing announced",
+            "image_path": IMAGES["brewing_icon"],
+            "return_to": "menu",
+        })
 
     def send_coffee_made_message(self):
-        payload = {
-            "messageContent": ":i-want-to-let-you-know-i-have-recently-made-coffee-but-i-dont-want-to-write-out-a-message:"
-        }
-        ok, body = self._send.post(send_message_webhook, payload)
-        if not ok:
-            print("[BroadcastScreen] ready webhook failed")
+        # SMOKE TEST P4.1: navigate to SuccessScreen with ready BMP.
+        if self._navigator is None:
+            return
+        self._navigator.navigate("success", {
+            "message": "Ready announced",
+            "image_path": IMAGES["ready_icon"],
+            "return_to": "menu",
+        })
 
     def goBackToMenu(self):
         if self._navigator is not None:
@@ -113,24 +118,17 @@ class BroadcastScreen:
         return False
 
     def fire_button_callback(self, touch):
+        # SMOKE TEST P4.1: brewing/done callbacks navigate to SuccessScreen
+        # themselves; skip the v1 trailing sleep+goBackToMenu so SuccessScreen
+        # isn't pre-empted.
         if self.BackButton.isPressed(touch):
             self.BackButton.runCallback()
             return
-        if not self.app_state.get("wifi_connected", False):
-            self.status_label.text = "No WiFi connection!"
-            self.status_label.color = 0xFF0000
-            return
-        self.status_label.color = 0x00FF00
-        self.status_label.text = "Sending..."
         if self.DoneBrewingButton.isPressed(touch):
             self.app_state["last_brew_time"] = system_time.monotonic()
-            self.app_state["reset_react_options"] = True
             self.DoneBrewingButton.runCallback()
-        elif self.BrewingButton.isPressed(touch):
+            return
+        if self.BrewingButton.isPressed(touch):
             self.app_state["last_brew_time"] = system_time.monotonic()
-            self.app_state["reset_react_options"] = True
             self.BrewingButton.runCallback()
-        self.status_label.text = "SENT! Great Success!"
-        system_time.sleep(2)
-        self.setDefaultStatus()
-        self.goBackToMenu()
+            return
