@@ -36,7 +36,7 @@ class CardButton:
     def __init__(self, group, x, y, width, height,
                  icon_path, label, border_colour,
                  callback, fill_colour=None,
-                 label_colour=None, hidden=False):
+                 label_colour=None, label_scale=2, hidden=False):
         if not callable(callback):
             raise TypeError("CardButton callback must be callable; wrap with lambda")
 
@@ -76,14 +76,22 @@ class CardButton:
             pass
 
         # Label, centred horizontally, near the bottom of the card.
+        # `label` may be a str (single line) or a sequence of strs (stacked
+        # lines). When stacked, the block is centred on `label_y` and each
+        # line is centred horizontally within the card.
         label_y = y + height - 22
-        self._group.append(
-            layout.make_text_label(
-                text=label, scale=2, color=self._label_colour,
-                x=x + width // 2 - layout.get_text_width(label, 2) // 2,
-                y=label_y,
+        lines = list(label) if isinstance(label, (list, tuple)) else [label]
+        line_stride = layout.CHAR_BASE_HEIGHT * label_scale + 2
+        first_line_y = label_y - (len(lines) - 1) * line_stride // 2
+        for i, line in enumerate(lines):
+            line_y = first_line_y + i * line_stride
+            self._group.append(
+                layout.make_text_label(
+                    text=line, scale=label_scale, color=self._label_colour,
+                    x=x + width // 2 - layout.get_text_width(line, label_scale) // 2,
+                    y=line_y,
+                )
             )
-        )
 
         group.append(self._group)
 

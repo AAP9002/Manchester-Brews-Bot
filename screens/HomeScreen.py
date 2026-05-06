@@ -34,8 +34,9 @@ class HomeScreen:
         self._send_card = CardButton(
             group=self._group,
             x=pad, y=pad, width=left_w, height=DISPLAY["height"] - pad * 2,
-            icon_path=IMAGES["send_icon"], label="Send announcement",
+            icon_path=IMAGES["send_icon"], label=("Send", "announcement"),
             border_colour=COLOURS["blue"], fill_colour=COLOURS["blue"],
+            label_scale=1,
             callback=lambda: self._navigator.navigate("announcement"),
         )
 
@@ -44,6 +45,7 @@ class HomeScreen:
             x=right_x, y=pad, width=right_w, height=right_h,
             icon_path=IMAGES["low_beans_icon"], label="Low on beans",
             border_colour=COLOURS["red"], label_colour=COLOURS["red"],
+            label_scale=1,
             callback=self._fire_low_beans,
         )
 
@@ -52,6 +54,7 @@ class HomeScreen:
             x=right_x, y=pad + right_h + pad, width=right_w, height=right_h,
             icon_path=IMAGES["log_intake_icon"], label="Log your intake",
             border_colour=COLOURS["teal"], label_colour=COLOURS["teal"],
+            label_scale=1,
             callback=self._fire_log_intake,
         )
 
@@ -96,7 +99,10 @@ class HomeScreen:
     def _fire_log_intake(self):
         self._counter.increment()
         self._counter.sync()
+        count = self._counter.get_count()
+        cup_word = "cup" if count == 1 else "cups"
         self._navigator.navigate("success", {
-            "message": MESSAGES["log_intake_default"],
+            "message": (MESSAGES["log_intake_default"],
+                        str(count) + " " + cup_word + " so far"),
             "return_to": "home",
         })

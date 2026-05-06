@@ -59,8 +59,8 @@ class SuccessScreen:
                 parent_width=DISPLAY["width"], parent_height=DISPLAY["height"],
             ))
             self._group.append(layout.make_text_label(
-                main, scale=2, color=COLOURS["white"],
-                x="center", y=text_area_top + 30,
+                main, scale=1, color=COLOURS["white"],
+                x="center", y=text_area_top + 20,
                 parent_width=DISPLAY["width"], parent_height=DISPLAY["height"],
             ))
         else:
