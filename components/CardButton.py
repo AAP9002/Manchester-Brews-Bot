@@ -1,28 +1,3 @@
-# P2.1 — Build components/CardButton.py
-
-**Status:** done
-**Phase:** P2 — Components
-**Depends on:** P1.3 (utils/touch.py), P1.4 (utils/config.py), P1.8 (utils/layout.py)
-**Blocks:** P4.2, P4.3
-**HLD reference:** §4 (components/CardButton.py), §7 Touch input model
-
-## Goal
-Build the primary v2 button: a card with an icon, a label underneath, a coloured border (and optional fill), full-card hit-test, and non-blocking press feedback.
-
-## Context
-The v2 designs use card-style buttons throughout the home and announcement screens. v1 had a `TouchButton` that was just a BMP with no label, no border, and a hit-test with manual padding tuples. `CardButton` replaces that for the new screens; `TouchButton` lives on for the small back button only.
-
-The competitor codebase that inspired v2 uses non-blocking press feedback — flash via timestamp checked each tick — instead of v1's `time.sleep(2)` blocking pattern. We adopt that.
-
-The v1 callback bug (`TouchButton(..., callback=SendRequest.post(URL))` evaluates the call at construction time) **must not** be inheritable. The constructor must verify `callback` is callable, or document strongly that lambdas are required.
-
-## Files to touch
-- `components/CardButton.py` (create)
-
-## Specification
-
-```python
-# components/CardButton.py
 """Primary v2 button: BMP icon + label + coloured border in a rounded card.
 
 Usage:
@@ -153,25 +128,3 @@ class CardButton:
     def show(self):
         self._hidden = False
         self._group.hidden = False
-```
-
-## Smoke test
-Add a tiny test sketch (NOT committed under `screens/`) inside the task branch — e.g. a temporary `_smoke_cardbutton.py` at project root — that builds one card, polls touches via `TouchTracker`, prints when pressed, and shows the flash. Delete it before marking the task done.
-
-## Acceptance criteria
-- [ ] `components/CardButton.py` exports a `CardButton` class with the API described above.
-- [ ] Constructor raises `TypeError` if `callback` is not callable.
-- [ ] `is_pressed` uses `utils.touch.normalize` (no inline rotation).
-- [ ] `flash(now)` sets `_flash_until = now + 0.18` and changes `_bg.fill`; **no `time.sleep` anywhere**.
-- [ ] `tick(now)` restores resting fill once the flash window elapses.
-- [ ] `fire()` is gated by `TIMING["tap_debounce"]` (300 ms) — calling fire twice in rapid succession only fires the callback once.
-- [ ] Card label is rendered via `utils.layout.make_text_label` / `get_text_width`.
-- [ ] Missing BMP path does not crash construction (logs/ignores; renders text-only card).
-- [ ] On-device smoke test renders a card, fires the callback once per tap (not multiple times), and flashes briefly without blocking.
-
-## Out of scope
-- Multi-line labels — single-line only for v2 (the design shows one or two short words per card).
-- Disabled/loading variants — future.
-- Long-press, double-tap, drag — not used in v2.
-- Wiring into `HomeScreen` / `AnnouncementScreen` — that is P4.2 / P4.3.
-- Replacing `TouchButton` — `TouchButton` stays for the back button.
