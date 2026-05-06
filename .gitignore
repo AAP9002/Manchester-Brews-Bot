@@ -1,0 +1,15 @@
+# Secrets — never commit live credentials
+settings.toml
+
+# CircuitPython auto-generated on each boot, device-specific
+boot_out.txt
+
+# macOS metadata
+.DS_Store
+
+# JetBrains/PyCharm IDE config
+.idea/
+
+# SD card mount point — only keep the placeholder
+sd/*
+!sd/placeholder.txt
