@@ -1,5 +1,4 @@
 import os
-from utils.SendRequest import SendRequest
 
 _WMO_CONDITIONS = {
     0:  "Clear",
@@ -27,11 +26,12 @@ _WMO_CONDITIONS = {
 }
 
 class WeatherManager:
-    app_state = None
+    def __init__(self, send, app_state):
+        self._send = send
+        self._state = app_state
 
-    @staticmethod
-    def fetch():
-        if WeatherManager.app_state and not WeatherManager.app_state.get("wifi_connected", False):
+    def fetch(self):
+        if self._state and not self._state.get("wifi_connected", False):
             print("[Weather] No WiFi - skipping fetch")
             return
 
@@ -50,9 +50,9 @@ class WeatherManager:
         )
 
         print("[Weather] Fetching from Open-Meteo...")
-        data = SendRequest.get(url)
+        ok, data = self._send.get(url)
 
-        if data is None:
+        if not ok or data is None:
             print("[Weather] No data returned")
             return
 
@@ -68,10 +68,10 @@ class WeatherManager:
             except Exception:
                 pass
 
-            if WeatherManager.app_state is not None:
-                WeatherManager.app_state["weather_temp"] = temp
-                WeatherManager.app_state["weather_condition"] = condition
-                WeatherManager.app_state["weather_rain_chance"] = rain_chance
+            if self._state is not None:
+                self._state["weather_temp"] = temp
+                self._state["weather_condition"] = condition
+                self._state["weather_rain_chance"] = rain_chance
 
             print("[Weather] " + str(temp) + "C - " + condition + " - Rain: " + str(rain_chance) + "%")
         except Exception as e:

@@ -39,21 +39,21 @@ try:
 except Exception as e:
     print(f"WiFi Error: {e}")
 
-SendRequest.app_state = app_state
-CoffeeCounter.app_state = app_state
-WeatherManager.app_state = app_state
+send_request = SendRequest(app_state)
+coffee_counter = CoffeeCounter(send_request, app_state)
+weather_manager = WeatherManager(send_request, app_state)
 
 # ------------------- Build UI Once -------------------
-menu_screen = MenuScreen(app_state)
-broadcast_screen = BroadcastScreen(app_state)
+menu_screen = MenuScreen(app_state, send_request, coffee_counter)
+broadcast_screen = BroadcastScreen(app_state, send_request)
 # react_screen = ReactScreen(app_state)
 display.root_group = menu_screen.get_screen()
 
 # Fetch coffee count from Google Sheets
 if app_state["wifi_connected"]:
-    CoffeeCounter.fetch()
+    coffee_counter.fetch()
     menu_screen.updateCoffeeCount()
-    WeatherManager.fetch()
+    weather_manager.fetch()
     menu_screen.updateWeather()
 
 # ------------------- Main Loop -------------------
@@ -107,7 +107,7 @@ while True:
         # Refresh weather every 10 minutes
         if system_time.monotonic() - last_weather_update >= 600:
             last_weather_update = system_time.monotonic()
-            WeatherManager.fetch()
+            weather_manager.fetch()
             if app_state["current_screen"] == "menu_screen":
                 menu_screen.updateWeather()
 
@@ -119,9 +119,9 @@ while True:
                 wifi.radio.connect(ssid, password)
                 app_state["wifi_connected"] = True
                 print("WiFi reconnected!")
-                CoffeeCounter.fetch()
+                coffee_counter.fetch()
                 menu_screen.updateCoffeeCount()
-                WeatherManager.fetch()
+                weather_manager.fetch()
                 menu_screen.updateWeather()
                 last_weather_update = system_time.monotonic()
             except Exception as e:

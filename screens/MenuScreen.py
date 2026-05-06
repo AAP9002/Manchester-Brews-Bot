@@ -8,12 +8,12 @@ import terminalio
 import random
 import os
 import microcontroller
-from utils.CoffeeCounter import CoffeeCounter
-from utils.SendRequest import SendRequest
 
 class MenuScreen:
-    def __init__(self, app_state):
+    def __init__(self, app_state, send_request, coffee_counter):
         self.app_state = app_state
+        self._send = send_request
+        self._counter = coffee_counter
         self.screen_group = displayio.Group()
         self.BroadcastButton = None
         self.PlusOneButton = None
@@ -41,13 +41,13 @@ class MenuScreen:
         self.app_state["current_screen"] = "broadcast_screen"
 
     def incrementCoffeeCount(self):
-        CoffeeCounter.increment()
+        self._counter.increment()
         self.updateCoffeeCount()
         self.plus_btn_bg.fill = 0x444444
         self.plus_btn_bg.outline = 0x666666
         self.plus_btn_label.color = 0x888888
         self.celebrateCount()
-        CoffeeCounter.sync()
+        self._counter.sync()
         self.updateCoffeeCount()
         self.plus_btn_bg.fill = 0xFF8C00
         self.plus_btn_bg.outline = 0xFFAA33
@@ -243,9 +243,14 @@ class MenuScreen:
         bean_emoji = random.choice([":bean:", ":noot_like_this:", ":comfy-panic:", ":dont-panic:"])
         payload = {"messageContent": bean_emoji + " Running low on coffee beans!"}
         try:
-            SendRequest.post(webhook, payload)
-            self.status_label.text = "Bean alert sent!"
+            ok, body = self._send.post(webhook, payload)
+            if ok:
+                self.status_label.text = "Bean alert sent!"
+            else:
+                print("[MenuScreen] low-beans webhook failed")
+                self.status_label.text = "Send failed!"
         except Exception as e:
+            print("[MenuScreen] low-beans send error: " + str(e))
             self.status_label.text = "Send failed!"
         self.bean_btn_bg.fill = 0x8B0000
         self.bean_btn_icon.color = 0xFFFF00
