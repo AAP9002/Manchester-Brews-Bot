@@ -17,11 +17,11 @@ The board mounts as a USB drive named `CIRCUITPY`. To deploy, copy the project f
 - `code.py` is the entry point (CircuitPython runs it on boot).
 - `settings.toml` holds env vars read via `os.getenv(...)` (WiFi creds, the single Slack webhook, Google Sheet URL, `LOW_BEANS_PERSON`). It is `.gitignore`d; `settings.example.toml` is the template.
 - `lib/` contains the bundled Adafruit `.mpy` modules — these must be deployed alongside the source.
-- `deploy.sh` is a macOS rsync watcher that mirrors the working tree to the mounted `CIRCUITPY` volume on save.
+- `deploy.sh` is a one-shot rsync that mirrors the working tree to the mounted `CIRCUITPY` volume; run it manually to deploy.
 - `boot_out.txt` is written by CircuitPython on boot; do not edit.
 - `sd/` is the SD card mount point; only `placeholder.txt` lives in the repo.
 
-To iterate: edit a file, save (or run `deploy.sh`), the board auto-resets and reruns `code.py`. Use the serial console (e.g. `screen /dev/tty.usbmodem*` or Mu/Thonny) to see `print()` output and tracebacks.
+To iterate: edit a file, run `deploy.sh` to push to the board; CircuitPython auto-resets and reruns `code.py` once the copy lands. Use the serial console (e.g. `screen /dev/tty.usbmodem*` or Mu/Thonny) to see `print()` output and tracebacks.
 
 ## Architecture (short version)
 
