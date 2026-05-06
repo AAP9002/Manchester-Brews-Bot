@@ -71,6 +71,15 @@ All HTTP goes through `utils/SendRequest.py`, which owns a single `adafruit_requ
 
 `bruno/BREWS-CHANNEL/` is a [Bruno](https://www.usebruno.com/) API client collection for exercising the Slack webhooks without flashing the device.
 
+## Git workflow
+
+See [GIT_WORKFLOW.md](GIT_WORKFLOW.md) for the full rules. Summary:
+
+- **One sub-task per branch**, cut from an up-to-date `main`. Naming: `type/short-kebab-description` (e.g. `feat/weather-cache`, `fix/touch-rotation`).
+- **Small atomic commits**, Conventional Commits format: `type(scope): imperative subject`. Body only when the *why* is non-obvious.
+- Never stage `settings.toml` (live secrets) or `boot_out.txt` (boot churn). Name files explicitly — no `git add -A`.
+- Confirm with the user before `git push`, `git merge`, opening a PR, force-pushing, or rewriting shared history.
+
 ## Things to know before editing
 
 - **`ReactScreen` is currently disabled** — imports, instantiation, and dispatch are commented out in `code.py`. It also has a latent bug: `TouchButton(..., callback=SendRequest.post(WEBHOOK_URL))` *invokes* `post` at construction time instead of passing a callable, so re-enabling it as-is would fire every webhook on screen build. Fix by passing `lambda: SendRequest.post(WEBHOOK_URL)` (or equivalent) before re-enabling.
