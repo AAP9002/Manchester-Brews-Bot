@@ -1,26 +1,3 @@
-# P1.8 — Build utils/layout.py
-
-**Status:** done
-**Phase:** P1 — Foundation
-**Depends on:** none
-**Blocks:** P2.1, P4.1, P4.2, P4.3, P4.4
-**HLD reference:** §4 (utils/layout.py), §13 Borrowed patterns
-
-## Goal
-Provide stateless text and layout primitives used by every v2 screen and component, replacing v1's hand-coded `x=25, y=85` magic-number style.
-
-## Context
-The v2 designs require centred icons with labels underneath, success messages that may span two lines, and consistently-anchored text — none of which v1 supports cleanly. These functions are ported from a sister CircuitPython codebase that uses `terminalio.FONT` (a fixed-width 5×8 font) and computes layout arithmetically. No state, no I/O.
-
-`terminalio.FONT` glyphs are 5px wide and 8px tall with 1px gap (these are the constants `CHAR_BASE_WIDTH`, `CHAR_BASE_HEIGHT`, `CHAR_BASE_GAP`).
-
-## Files to touch
-- `utils/layout.py` (create)
-
-## Specification
-
-```python
-# utils/layout.py
 """Text and layout primitives.
 
 Stateless helpers for positioning labels and computing text metrics
@@ -59,8 +36,8 @@ def make_text_label(text, scale=1, color=0xDDDDDD, x=0, y=0,
     """Create a terminalio.FONT label, optionally centred via the 'center' sentinel.
 
     x or y may be:
-        int      — exact pixel coordinate
-        'center' — centred on the parent dimension
+        int      - exact pixel coordinate
+        'center' - centred on the parent dimension
     """
     text_label = label.Label(terminalio.FONT, text=text, color=color)
     text_label.scale = scale
@@ -120,21 +97,3 @@ def split_title_lines(text, scale, max_width, max_lines=2):
         lines = lines[:max_lines]
     lines[-1] = truncate_to_width(lines[-1], scale, max_width)
     return lines
-```
-
-## Acceptance criteria
-- [ ] `utils/layout.py` exists with all five functions and the three font-metric constants.
-- [ ] `make_text_label("Hello", x="center", y="center")` produces a label horizontally and vertically centred on a 320×240 parent.
-- [ ] `get_text_width("ab", 2)` returns `22` (2 chars × 10px wide + 1 gap × 2px).
-- [ ] `truncate_to_width("Hello world", 1, 30)` returns a string ending in `"..."` whose pixel width ≤ 30.
-- [ ] `split_title_lines("a very long title", 2, 80)` returns 1–2 strings, the last truncated if needed.
-- [ ] No I/O at import time. Module imports cleanly under CircuitPython.
-
-## Out of scope
-- No font selection beyond `terminalio.FONT`. If v3 wants custom fonts, that's a separate task.
-- No rich text / mixed colour spans.
-- Do not migrate any existing screen to use these helpers — that's the job of the screen tasks (P4.x).
-- Do not add bidirectional or RTL handling.
-
-## Notes
-- Acceptance criterion #3 says `get_text_width("ab", 2)` returns `21`, but both the formula in the spec (`len * (BASE_WIDTH*scale) + (len-1) * (GAP*scale)`) and the criterion's own parenthetical arithmetic ("2 chars × 10px wide + 1 gap × 2px") evaluate to `22`. The code in the Specification block was treated as authoritative, so the implemented function returns `22` for this input. If `21` is the intended value, the formula needs revisiting (perhaps `(len-1) * (BASE_WIDTH*scale)` for the char term, or dropping the trailing/leading gap differently) — flagging rather than silently deviating from the spec code.
