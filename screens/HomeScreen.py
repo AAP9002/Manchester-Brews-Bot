@@ -101,8 +101,8 @@ class HomeScreen:
         self._counter.sync()
         count = self._counter.get_count()
         cup_word = "cup" if count == 1 else "cups"
+        tagline = str(count) + " " + cup_word + " this year"
         self._navigator.navigate("success", {
-            "message": (MESSAGES["log_intake_default"],
-                        str(count) + " " + cup_word + " so far"),
+            "message": (MESSAGES["log_intake_default"], tagline),
             "return_to": "home",
         })
