@@ -1,36 +1,10 @@
-# P4.2 — Build screens/HomeScreen.py
+"""Home screen: three card buttons matching the v2 design.
 
-**Status:** done
-**Phase:** P4 — New screens
-**Depends on:** P2.1 (CardButton), P3.1 (Navigator), P4.1 (SuccessScreen), P1.4 (config), P1.8 (layout)
-**Blocks:** P4.5
-**HLD reference:** §4 (screens/HomeScreen.py), §6 Navigation flows; design files at project root
+- Send announcement (left half, blue fill) -> navigate("announcement")
+- Low on beans (top right, red border)     -> Slack post + navigate("success")
+- Log your intake (bottom right, teal border) -> increment counter + navigate("success")
+"""
 
-## Goal
-The new home screen: three card buttons matching `design-home-and-announcement-screen.png` and the related design exports.
-
-## Context
-Layout (320×240 display):
-- **Send announcement** — left half, blue **fill**, white icon + label. Largest card.
-- **Low on beans** — top right, dark fill, **red border**, red icon + label.
-- **Log your intake** — bottom right, dark fill, **teal border**, teal icon + label.
-
-Card icon BMPs (`announcement.bmp`, `low-beans.bmp`, `log-intake.bmp`) may not yet exist — `CardButton` falls back to a text-only card if the BMP is missing, so this task can be implemented and visually validated even before assets land. See `tasks/v2/open-questions.md`.
-
-Tap behaviour:
-| Card | Action |
-|---|---|
-| Send announcement | `navigator.navigate("announcement")` |
-| Low on beans | `slack.post(send, slack.Msg.LOW_ON_BEANS)`; navigate to `success` with `message=MESSAGES["low_on_beans"]`, `return_to="home"` |
-| Log your intake | `coffee_counter.increment(); coffee_counter.sync()`; navigate to `success` with `message=MESSAGES["log_intake_default"]`, `return_to="home"` |
-
-## Files to touch
-- `screens/HomeScreen.py` (create)
-
-## Specification
-
-```python
-# screens/HomeScreen.py
 import os
 import displayio
 from adafruit_display_shapes.rect import Rect
@@ -126,23 +100,3 @@ class HomeScreen:
             "message": MESSAGES["log_intake_default"],
             "return_to": "home",
         })
-```
-
-The Slack post is dispatched via `utils.slack.post(send, slack.Msg.LOW_ON_BEANS)` — the helper reads the single `SEND_MESSAGE_SLACK_WEBHOOK` env var internally and looks up the message content in `utils.config.SLACK_MESSAGES["low_on_beans"]`.
-
-## Acceptance criteria
-- [ ] `screens/HomeScreen.py` exposes `HomeScreen(navigator, send, coffee_counter)` implementing the Navigator screen protocol.
-- [ ] Three cards rendered with the colour scheme matching the design.
-- [ ] Tapping a card triggers a single non-blocking flash (`card.flash(now)`) and fires the action exactly once.
-- [ ] Send announcement → navigates to `"announcement"`.
-- [ ] Low on beans → posts via `slack.post(send, slack.Msg.LOW_ON_BEANS)` then navigates to `"success"` with the formatted two-line message; subtitle reads `"<LOW_BEANS_PERSON> has been peer-pressured effectively..."`, defaulting to `"Someone"` if the env var is unset.
-- [ ] Log your intake → increments + syncs the counter then navigates to `"success"` with the default single-line message.
-- [ ] No `time.sleep` anywhere.
-- [ ] On-device: each tap behaves correctly, the success screen returns to home, no double-firing.
-
-## Out of scope
-- Stats / coffee count display on home — design shows none in v2.
-- Weather display — removed.
-- WifiIndicator placement on home — deferred (open-questions).
-- Wiring into Navigator at boot — that's P4.5.
-- Milestone / sassy messages for "Log your intake" — deferred to a future feature; this task uses `MESSAGES["log_intake_default"]`.
