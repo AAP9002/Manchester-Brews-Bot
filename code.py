@@ -8,16 +8,18 @@ from screens.MenuScreen import MenuScreen
 # from screens.ReactScreen import ReactScreen
 from utils.SendRequest import SendRequest
 from utils.CoffeeCounter import CoffeeCounter
+from utils.Navigator import Navigator
+from utils.touch import TouchTracker
+from utils.config import TIMING
 
 # Shared state for screen switching
 app_state = {
-    "current_screen": "menu_screen",
     "last_brew_time": None,
     "reset_react_options": False,
     "wifi_connected": False,
     "coffee_count": 0,
     }
-            
+
 display = board.DISPLAY
 ctp = adafruit_cst8xx.Adafruit_CST8XX(board.I2C())
 
@@ -39,10 +41,14 @@ send_request = SendRequest(app_state)
 coffee_counter = CoffeeCounter(send_request, app_state)
 
 # ------------------- Build UI Once -------------------
-menu_screen = MenuScreen(app_state, send_request, coffee_counter)
-broadcast_screen = BroadcastScreen(app_state, send_request)
+navigator = Navigator(display)
+menu_screen = MenuScreen(app_state, send_request, coffee_counter, navigator=navigator)
+broadcast_screen = BroadcastScreen(app_state, send_request, navigator=navigator)
 # react_screen = ReactScreen(app_state)
-display.root_group = menu_screen.get_screen()
+
+navigator.register("menu", menu_screen)
+navigator.register("broadcast", broadcast_screen)
+navigator.navigate("menu")
 
 # Fetch coffee count from Google Sheets
 if app_state["wifi_connected"]:
@@ -50,51 +56,23 @@ if app_state["wifi_connected"]:
     menu_screen.updateCoffeeCount()
 
 # ------------------- Main Loop -------------------
-last_screen = app_state["current_screen"]
+tracker = TouchTracker(ctp)
 last_wifi_update = 0
 
 while True:
-    touches = ctp.touches
-    if touches and len(touches) > 0:
-        touch = touches[0]
-        if app_state["current_screen"] == "menu_screen" and menu_screen.is_button_pressed(touch):
-            menu_screen.fire_button_callback(touch)
-        elif app_state["current_screen"] == "broadcast_screen" and broadcast_screen.is_button_pressed(touch):
-            broadcast_screen.fire_button_callback(touch)
-        # elif app_state["current_screen"] == "react_screen" and react_screen.is_button_pressed(touch):
-        #     react_screen.fire_button_callback(touch)
+    touch = tracker.poll()
+    if touch is not None:
+        navigator.handle_touch(touch)
 
-        # if app_state["reset_react_options"]:
-        #     react_screen.rebuild()
-        #     app_state["reset_react_options"] = False
-
-    # Handle screen switching
-    if app_state["current_screen"] != last_screen:
-        last_screen = app_state["current_screen"]
-        if app_state["current_screen"] == "menu_screen":
-            display.root_group = menu_screen.get_screen()
-            menu_screen.wifi_indicator.update()
-        elif app_state["current_screen"] == "broadcast_screen":
-            display.root_group = broadcast_screen.get_screen()
-            broadcast_screen.wifi_indicator.update()
-        # elif app_state["current_screen"] == "react_screen":
-        #     display.root_group = react_screen.get_screen()
-        #     react_screen.wifi_indicator.update()
-        system_time.sleep(0.5)
-
-    # Update status on menu screen
-    if app_state["current_screen"] == "menu_screen":
-        menu_screen.updateStatus()
+    now = system_time.monotonic()
+    navigator.tick(now)
 
     # Update WiFi strength indicator and reconnect if needed
-    if system_time.monotonic() - last_wifi_update >= 5:
-        last_wifi_update = system_time.monotonic()
-        if app_state["current_screen"] == "menu_screen":
-            menu_screen.wifi_indicator.update()
-        elif app_state["current_screen"] == "broadcast_screen":
-            broadcast_screen.wifi_indicator.update()
-        # elif app_state["current_screen"] == "react_screen" and react_screen.wifi_indicator:
-        #     react_screen.wifi_indicator.update()
+    if now - last_wifi_update >= TIMING["wifi_poll"]:
+        last_wifi_update = now
+        active = navigator.active
+        if active is not None and getattr(active, "wifi_indicator", None) is not None:
+            active.wifi_indicator.update()
 
         # Update WiFi state and auto-reconnect if dropped
         app_state["wifi_connected"] = wifi.radio.ap_info is not None

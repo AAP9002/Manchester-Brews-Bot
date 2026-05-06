@@ -10,10 +10,11 @@ import os
 import microcontroller
 
 class MenuScreen:
-    def __init__(self, app_state, send_request, coffee_counter):
+    def __init__(self, app_state, send_request, coffee_counter, navigator=None):
         self.app_state = app_state
         self._send = send_request
         self._counter = coffee_counter
+        self._navigator = navigator
         self.screen_group = displayio.Group()
         self.BroadcastButton = None
         self.PlusOneButton = None
@@ -35,7 +36,10 @@ class MenuScreen:
         self.setDefaultStatus()
 
     def openBroadcastScreen(self):
-        self.app_state["current_screen"] = "broadcast_screen"
+        if self._navigator is not None:
+            self._navigator.navigate("broadcast")
+        else:
+            self.app_state["current_screen"] = "broadcast_screen"
 
     def incrementCoffeeCount(self):
         self._counter.increment()
@@ -181,14 +185,33 @@ class MenuScreen:
     def get_screen(self):
         return self.screen_group
 
+    # ---------- Navigator protocol ----------
+
+    def get_group(self):
+        return self.screen_group
+
+    def on_enter(self, params=None):
+        # Refresh state-driven labels each time we land on this screen.
+        self.updateStatus()
+        if self.wifi_indicator is not None:
+            self.wifi_indicator.update()
+
+    def handle_touch(self, touch):
+        # touch is already normalized (tx, ty) by TouchTracker.
+        if self.is_button_pressed(touch):
+            self.fire_button_callback(touch)
+
+    def tick(self, now):
+        # Keep the menu's "Last brewed" string fresh.
+        self.updateStatus()
+
     def updateCoffeeCount(self):
         count = self.app_state.get("coffee_count", 0)
         self.count_label.text = str(count)
 
     def isLowBeansPressed(self, touch):
-        raw_x, raw_y = touch["x"], touch["y"]
-        tx = raw_y
-        ty = 240 - raw_x
+        # touch is already normalized (tx, ty) — see is_button_pressed docstring.
+        tx, ty = touch[0], touch[1]
         bx, by, bw, bh = self.bean_btn_bounds
         pad = 8
         return (bx - pad) <= tx <= (bx + bw + pad) and (by - pad) <= ty <= (by + bh + pad)
@@ -225,14 +248,15 @@ class MenuScreen:
         system_time.sleep(1.5)
 
     def isPlusOnePressed(self, touch):
-        raw_x, raw_y = touch["x"], touch["y"]
-        tx = raw_y
-        ty = 240 - raw_x
+        # touch is already normalized (tx, ty) — see is_button_pressed docstring.
+        tx, ty = touch[0], touch[1]
         bx, by, bw, bh = self.plus_btn_bounds
         pad = 10
         return (bx - pad) <= tx <= (bx + bw + pad) and (by - pad) <= ty <= (by + bh + pad)
 
     def is_button_pressed(self, touch):
+        # touch is already normalized (tx, ty) — see Navigator's handle_touch
+        # contract. All sub-hit-tests below also expect normalized coordinates.
         if self.BroadcastButton.isPressed(touch):
             return True
         elif self.isPlusOnePressed(touch):

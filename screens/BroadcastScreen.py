@@ -10,9 +10,10 @@ import os
 send_message_webhook = os.getenv("SEND_MESSAGE_SLACK_WEBHOOK")
 
 class BroadcastScreen:
-    def __init__(self, app_state, send_request):
+    def __init__(self, app_state, send_request, navigator=None):
         self.app_state = app_state
         self._send = send_request
+        self._navigator = navigator
         self.screen_group = displayio.Group()
         self.DoneBrewingButton = None
         self.BrewingButton = None
@@ -39,7 +40,10 @@ class BroadcastScreen:
             print("[BroadcastScreen] ready webhook failed")
 
     def goBackToMenu(self):
-        self.app_state["current_screen"] = "menu_screen"
+        if self._navigator is not None:
+            self._navigator.navigate("menu")
+        else:
+            self.app_state["current_screen"] = "menu_screen"
 
     def build(self):
         header = RoundRect(60, 10, 260, 40, 10, fill=0x000000, outline=0xFF00FF, stroke=3)
@@ -79,7 +83,26 @@ class BroadcastScreen:
 
     def get_screen(self):
         return self.screen_group
-    
+
+    # ---------- Navigator protocol ----------
+
+    def get_group(self):
+        return self.screen_group
+
+    def on_enter(self, params=None):
+        self.setDefaultStatus()
+        if self.wifi_indicator is not None:
+            self.wifi_indicator.update()
+
+    def handle_touch(self, touch):
+        # touch is already normalized (tx, ty) by TouchTracker.
+        if self.is_button_pressed(touch):
+            self.fire_button_callback(touch)
+
+    def tick(self, now):
+        # No time-based behaviour for v1 broadcast screen.
+        pass
+
     def is_button_pressed(self, touch):
         if self.DoneBrewingButton.isPressed(touch):
             return True

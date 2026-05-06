@@ -1,7 +1,6 @@
 import time
 import displayio
 
-from utils.touch import normalize
 from utils.config import TIMING
 
 
@@ -35,9 +34,15 @@ class TouchButton:
         self.hidden = True
 
     def isPressed(self, touch):
+        """Hit-test against this button.
+
+        ``touch`` must be already normalized — i.e. a (tx, ty) tuple in display
+        coordinates, as returned by ``utils.touch.TouchTracker.poll()`` or
+        ``utils.touch.normalize()``. Raw CST8xx coordinates are not accepted.
+        """
         if self.hidden:
             return False
-        tx, ty = normalize(touch)
+        tx, ty = touch[0], touch[1]
 
         left   = self.x - self.padding
         right  = self.x + self.width + self.padding

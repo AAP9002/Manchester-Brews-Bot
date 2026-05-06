@@ -23,7 +23,6 @@ Usage:
 import displayio
 from adafruit_display_shapes.roundrect import RoundRect
 
-from utils.touch import normalize
 from utils import layout
 from utils.config import COLOURS, TIMING
 
@@ -90,10 +89,16 @@ class CardButton:
 
     # ---------- Touch ----------
 
-    def is_pressed(self, raw_touch):
+    def is_pressed(self, touch):
+        """Hit-test against this card.
+
+        ``touch`` must be already normalized — i.e. a (tx, ty) tuple in display
+        coordinates, as returned by ``utils.touch.TouchTracker.poll()`` or
+        ``utils.touch.normalize()``. Raw CST8xx coordinates are not accepted.
+        """
         if self._hidden:
             return False
-        tx, ty = normalize(raw_touch)
+        tx, ty = touch[0], touch[1]
         return (self._x <= tx < self._x + self._w
                 and self._y <= ty < self._y + self._h)
 
