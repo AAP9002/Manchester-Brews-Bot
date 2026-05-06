@@ -6,25 +6,13 @@ from components.TouchButton import TouchButton
 from components.WifiIndicator import WifiIndicator
 import terminalio
 import os
-from utils.SendRequest import SendRequest
 
 send_message_webhook = os.getenv("SEND_MESSAGE_SLACK_WEBHOOK")
 
-def send_coffee_brewing_message():
-    payload = {
-        "messageContent": ":coffee-loading:"
-    }
-    SendRequest.post(send_message_webhook, payload)
-        
-def send_coffee_made_message():
-    payload = {
-        "messageContent": ":i-want-to-let-you-know-i-have-recently-made-coffee-but-i-dont-want-to-write-out-a-message:"
-    }
-    SendRequest.post(send_message_webhook, payload)    
-
 class BroadcastScreen:
-    def __init__(self, app_state):
+    def __init__(self, app_state, send_request):
         self.app_state = app_state
+        self._send = send_request
         self.screen_group = displayio.Group()
         self.DoneBrewingButton = None
         self.BrewingButton = None
@@ -33,6 +21,22 @@ class BroadcastScreen:
         self.wifi_indicator = None
         self.build()
         self.setDefaultStatus()
+
+    def send_coffee_brewing_message(self):
+        payload = {
+            "messageContent": ":coffee-loading:"
+        }
+        ok, body = self._send.post(send_message_webhook, payload)
+        if not ok:
+            print("[BroadcastScreen] brewing webhook failed")
+
+    def send_coffee_made_message(self):
+        payload = {
+            "messageContent": ":i-want-to-let-you-know-i-have-recently-made-coffee-but-i-dont-want-to-write-out-a-message:"
+        }
+        ok, body = self._send.post(send_message_webhook, payload)
+        if not ok:
+            print("[BroadcastScreen] ready webhook failed")
 
     def goBackToMenu(self):
         self.app_state["current_screen"] = "menu_screen"
@@ -60,8 +64,8 @@ class BroadcastScreen:
         button_label.y = 65
         self.screen_group.append(button_label)
 
-        self.DoneBrewingButton = TouchButton(180, 80, "/images/coffee-done.bmp", self.screen_group, send_coffee_made_message)
-        self.BrewingButton = TouchButton(10, 85, "/images/loading.bmp", self.screen_group, send_coffee_brewing_message)
+        self.DoneBrewingButton = TouchButton(180, 80, "/images/coffee-done.bmp", self.screen_group, self.send_coffee_made_message)
+        self.BrewingButton = TouchButton(10, 85, "/images/loading.bmp", self.screen_group, self.send_coffee_brewing_message)
 
         button_label_done = label.Label(terminalio.FONT, text="Ready!", scale=2, color=0xFFFFFF)
         button_label_done.x = 210

@@ -314,8 +314,8 @@ Edge-triggered detection prevents a single physical press from firing the same c
 
 - `settings.toml` is now `.gitignore`d
 - Add `settings.example.toml` with placeholder values
-- Webhook list shrinks from 7 to 4: send-message, brewing, ready, low-beans (no react webhooks)
-- `WEATHER_LAT` / `WEATHER_LON` / `UPDATE_INTERVAL_MS` removed
+- Webhook list shrinks from 7 to 1 (`SEND_MESSAGE_SLACK_WEBHOOK`); per-action message content is templated in `utils/config.SLACK_MESSAGES` and dispatched via `utils/slack.py`
+- `UPDATE_INTERVAL_MS` removed (was already dead config in v1; `WEATHER_LAT` / `WEATHER_LON` removed alongside the weather feature)
 
 ---
 
@@ -355,7 +355,7 @@ lib/                                 (Adafruit, unchanged)
 sd/                                  (unchanged)
 ```
 
-**Deleted**: `screens/MenuScreen.py`, `screens/BroadcastScreen.py`, `screens/ReactScreen.py`, `utils/WeatherManager.py`, `images/react*.bmp`, react-emoji BMPs.
+**Deleted**: `screens/MenuScreen.py`, `screens/BroadcastScreen.py`, `screens/ReactScreen.py`, `images/react*.bmp`, react-emoji BMPs. (`utils/WeatherManager.py` and weather state already removed in batch B.)
 
 ---
 
@@ -393,7 +393,7 @@ Phases are ordered so the device boots into a working state at the end of each. 
 
 ### Phase 5 — Cleanup
 16. Delete `MenuScreen.py`, `BroadcastScreen.py`, `ReactScreen.py`
-17. Delete `utils/WeatherManager.py` and weather state
+17. ~~Delete `utils/WeatherManager.py` and weather state~~ — done in batch B
 18. Remove unused BMPs (`react*.bmp`, emoji react icons)
 19. Trim react webhook entries from `settings.example.toml`
 20. Update `CLAUDE.md` to describe v2 architecture (this doc becomes the reference)

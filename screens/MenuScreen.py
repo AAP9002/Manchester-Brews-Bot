@@ -8,19 +8,16 @@ import terminalio
 import random
 import os
 import microcontroller
-from utils.CoffeeCounter import CoffeeCounter
-from utils.SendRequest import SendRequest
 
 class MenuScreen:
-    def __init__(self, app_state):
+    def __init__(self, app_state, send_request, coffee_counter):
         self.app_state = app_state
+        self._send = send_request
+        self._counter = coffee_counter
         self.screen_group = displayio.Group()
         self.BroadcastButton = None
         self.PlusOneButton = None
         self.status_label = None
-        self.temp_label = None
-        self.weather_label = None
-        self.rain_label = None
         self.count_label = None
         self.wifi_indicator = None
         self.last_plus_one_time = 0
@@ -41,13 +38,13 @@ class MenuScreen:
         self.app_state["current_screen"] = "broadcast_screen"
 
     def incrementCoffeeCount(self):
-        CoffeeCounter.increment()
+        self._counter.increment()
         self.updateCoffeeCount()
         self.plus_btn_bg.fill = 0x444444
         self.plus_btn_bg.outline = 0x666666
         self.plus_btn_label.color = 0x888888
         self.celebrateCount()
-        CoffeeCounter.sync()
+        self._counter.sync()
         self.updateCoffeeCount()
         self.plus_btn_bg.fill = 0xFF8C00
         self.plus_btn_bg.outline = 0xFFAA33
@@ -117,24 +114,6 @@ class MenuScreen:
 
         self.BroadcastButton = TouchButton(25, 85, "/images/broadcast.bmp", self.screen_group, self.openBroadcastScreen)
 
-        weather_bg = RoundRect(160, 58, 90, 60, 8, fill=0x001830, outline=0x2266AA, stroke=2)
-        self.screen_group.append(weather_bg)
-
-        self.temp_label = label.Label(terminalio.FONT, text="", scale=2, color=0xFFFF00)
-        self.temp_label.x = 165
-        self.temp_label.y = 74
-        self.screen_group.append(self.temp_label)
-
-        self.weather_label = label.Label(terminalio.FONT, text="", scale=1, color=0xADD8E6)
-        self.weather_label.x = 165
-        self.weather_label.y = 91
-        self.screen_group.append(self.weather_label)
-
-        self.rain_label = label.Label(terminalio.FONT, text="", scale=1, color=0x87CEEB)
-        self.rain_label.x = 165
-        self.rain_label.y = 104
-        self.screen_group.append(self.rain_label)
-
         bean_btn_x = 255
         bean_btn_y = 58
         bean_btn_w = 60
@@ -197,24 +176,10 @@ class MenuScreen:
 
     def updateStatus(self):
         self.setDefaultStatus()
-        self.updateWeather()
         self.updateCoffeeCount()
 
     def get_screen(self):
         return self.screen_group
-    
-    def updateWeather(self):
-        temp = self.app_state.get("weather_temp", None)
-        condition = self.app_state.get("weather_condition", None)
-        rain = self.app_state.get("weather_rain_chance", None)
-        if temp is not None and condition is not None:
-            self.temp_label.text = str(round(temp, 1)) + "C"
-            self.weather_label.text = condition
-            self.rain_label.text = ("Rain: " + str(rain) + "%") if rain is not None else ""
-        else:
-            self.temp_label.text = ""
-            self.weather_label.text = "No weather"
-            self.rain_label.text = ""
 
     def updateCoffeeCount(self):
         count = self.app_state.get("coffee_count", 0)
@@ -243,9 +208,14 @@ class MenuScreen:
         bean_emoji = random.choice([":bean:", ":noot_like_this:", ":comfy-panic:", ":dont-panic:"])
         payload = {"messageContent": bean_emoji + " Running low on coffee beans!"}
         try:
-            SendRequest.post(webhook, payload)
-            self.status_label.text = "Bean alert sent!"
+            ok, body = self._send.post(webhook, payload)
+            if ok:
+                self.status_label.text = "Bean alert sent!"
+            else:
+                print("[MenuScreen] low-beans webhook failed")
+                self.status_label.text = "Send failed!"
         except Exception as e:
+            print("[MenuScreen] low-beans send error: " + str(e))
             self.status_label.text = "Send failed!"
         self.bean_btn_bg.fill = 0x8B0000
         self.bean_btn_icon.color = 0xFFFF00
