@@ -3,12 +3,15 @@ settings.toml
 
 # CircuitPython auto-generated on each boot, device-specific
 boot_out.txt
+__pycache__/
+*.mpy.tmp
 
 # macOS metadata
 .DS_Store
 
 # JetBrains/PyCharm IDE config
 .idea/
+.vscode/
 
 # SD card mount point — only keep the placeholder
 sd/*
