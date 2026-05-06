@@ -1,6 +1,13 @@
+import time
 import displayio
 
+from utils.touch import normalize
+from utils.config import TIMING
+
+
 class TouchButton:
+    # callback must be a callable, not the result of a call. Wrap with `lambda: ...`
+    # at the call site if you need to pass arguments.
     def __init__(self, x, y, image_path, display_group, callback=None, padding=10):
         self.image = displayio.OnDiskBitmap(image_path)
         self.x = x
@@ -8,6 +15,7 @@ class TouchButton:
         self.callback = callback
         self.padding = padding
         self.hidden = False
+        self._next_fire_at = 0.0
 
         # Safe width/height fallback (in case BMP metadata failed)
         self.width = getattr(self.image, "width", 200)
@@ -29,10 +37,7 @@ class TouchButton:
     def isPressed(self, touch):
         if self.hidden:
             return False
-        raw_x, raw_y = touch["x"], touch["y"]
-
-        tx = raw_y
-        ty = 240 - raw_x
+        tx, ty = normalize(touch)
 
         left   = self.x - self.padding
         right  = self.x + self.width + self.padding
@@ -44,5 +49,9 @@ class TouchButton:
     def runCallback(self):
         if self.hidden:
             return
+        now = time.monotonic()
+        if now < self._next_fire_at:
+            return
+        self._next_fire_at = now + TIMING["tap_debounce"]
         if self.callback:
             self.callback()
