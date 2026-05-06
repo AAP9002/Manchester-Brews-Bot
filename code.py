@@ -1,63 +1,59 @@
 import os
 import time as system_time
-import wifi
+
 import board
+import displayio
+import wifi
+
 import adafruit_cst8xx
-from screens.BroadcastScreen import BroadcastScreen
-from screens.MenuScreen import MenuScreen
-# from screens.ReactScreen import ReactScreen
-from utils.SendRequest import SendRequest
-from utils.CoffeeCounter import CoffeeCounter
+
 from utils.Navigator import Navigator
 from utils.touch import TouchTracker
+from utils.SendRequest import SendRequest
+from utils.CoffeeCounter import CoffeeCounter
 from utils.config import TIMING
 
-# Shared state for screen switching
+from screens.HomeScreen import HomeScreen
+from screens.AnnouncementScreen import AnnouncementScreen
+from screens.SuccessScreen import SuccessScreen
+from screens.NoConnectionScreen import NoConnectionScreen
+
+
+def connect_wifi():
+    try:
+        wifi.radio.connect(
+            os.getenv("CIRCUITPY_WIFI_SSID"),
+            os.getenv("CIRCUITPY_WIFI_PASSWORD"),
+        )
+        return True
+    except Exception as exc:
+        print("initial wifi connect failed:", exc)
+        return False
+
+
 app_state = {
-    "last_brew_time": None,
-    "reset_react_options": False,
-    "wifi_connected": False,
+    "wifi_connected": connect_wifi(),
     "coffee_count": 0,
-    }
+    "last_brew_time": None,
+}
 
 display = board.DISPLAY
 ctp = adafruit_cst8xx.Adafruit_CST8XX(board.I2C())
 
-ssid = os.getenv("CIRCUITPY_WIFI_SSID")
-password = os.getenv("CIRCUITPY_WIFI_PASSWORD")
+send = SendRequest(app_state)
+counter = CoffeeCounter(send, app_state)
 
-thank_you_react_webhook = os.getenv("THANKS_REACT_TO_LAST_MESSAGE_SLACK_WEBHOOK")
-coffee_parrot_react_webhook = os.getenv("COFFEE_PARROT_REACT_TO_LAST_MESSAGE_SLACK_WEBHOOK")
-
-print(f"\nConnecting to {ssid}...")
-try:
-    wifi.radio.connect(ssid, password)
-    app_state["wifi_connected"] = True
-    print("WiFi Connected!")
-except Exception as e:
-    print(f"WiFi Error: {e}")
-
-send_request = SendRequest(app_state)
-coffee_counter = CoffeeCounter(send_request, app_state)
-
-# ------------------- Build UI Once -------------------
 navigator = Navigator(display)
-menu_screen = MenuScreen(app_state, send_request, coffee_counter, navigator=navigator)
-broadcast_screen = BroadcastScreen(app_state, send_request, navigator=navigator)
-# react_screen = ReactScreen(app_state)
+navigator.register("home",          HomeScreen(navigator, send, counter))
+navigator.register("announcement",  AnnouncementScreen(navigator, send))
+navigator.register("success",       SuccessScreen(navigator))
+navigator.register("no_connection", NoConnectionScreen(navigator, app_state))
 
-navigator.register("menu", menu_screen)
-navigator.register("broadcast", broadcast_screen)
-navigator.navigate("menu")
+navigator.navigate("home")
+counter.fetch()  # initial coffee count
 
-# Fetch coffee count from Google Sheets
-if app_state["wifi_connected"]:
-    coffee_counter.fetch()
-    menu_screen.updateCoffeeCount()
-
-# ------------------- Main Loop -------------------
 tracker = TouchTracker(ctp)
-last_wifi_update = 0
+last_wifi_check = 0.0
 
 while True:
     touch = tracker.poll()
@@ -65,26 +61,12 @@ while True:
         navigator.handle_touch(touch)
 
     now = system_time.monotonic()
+
+    if now - last_wifi_check > TIMING["wifi_poll"]:
+        last_wifi_check = now
+        connected = wifi.radio.connected
+        app_state["wifi_connected"] = connected
+        if not connected and navigator.active_name != "no_connection":
+            navigator.navigate("no_connection")
+
     navigator.tick(now)
-
-    # Update WiFi strength indicator and reconnect if needed
-    if now - last_wifi_update >= TIMING["wifi_poll"]:
-        last_wifi_update = now
-        active = navigator.active
-        if active is not None and getattr(active, "wifi_indicator", None) is not None:
-            active.wifi_indicator.update()
-
-        # Update WiFi state and auto-reconnect if dropped
-        app_state["wifi_connected"] = wifi.radio.ap_info is not None
-        if not app_state["wifi_connected"]:
-            print("WiFi lost, attempting reconnect...")
-            try:
-                wifi.radio.connect(ssid, password)
-                app_state["wifi_connected"] = True
-                print("WiFi reconnected!")
-                coffee_counter.fetch()
-                menu_screen.updateCoffeeCount()
-            except Exception as e:
-                print("WiFi reconnect failed: " + str(e))
-
-    system_time.sleep(0.0001)
