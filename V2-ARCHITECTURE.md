@@ -314,7 +314,7 @@ Edge-triggered detection prevents a single physical press from firing the same c
 
 - `settings.toml` is now `.gitignore`d
 - Add `settings.example.toml` with placeholder values
-- Webhook list shrinks from 7 to 4: send-message, brewing, ready, low-beans (no react webhooks)
+- Webhook list shrinks from 7 to 1 (`SEND_MESSAGE_SLACK_WEBHOOK`); per-action message content is templated in `utils/config.SLACK_MESSAGES` and dispatched via `utils/slack.py`
 - `WEATHER_LAT` / `WEATHER_LON` / `UPDATE_INTERVAL_MS` removed
 
 ---

@@ -36,6 +36,13 @@ MESSAGES = {
     "no_connection":      "No internet connection",
 }
 
+SLACK_MESSAGES = {
+    # Posted to SEND_MESSAGE_SLACK_WEBHOOK by utils/slack.py.
+    "low_on_beans": "Beans are running low — please refill",
+    "brewing":      "Coffee is brewing",
+    "ready":        "Coffee is ready",
+}
+
 IMAGES = {
     "send_icon":       "/images/announcement.bmp",
     "low_beans_icon":  "/images/low-beans.bmp",
