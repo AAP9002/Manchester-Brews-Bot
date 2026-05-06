@@ -54,6 +54,7 @@ class AnnouncementScreen:
             display_group=self._group,
             callback=lambda: self._navigator.navigate("home"),
             padding=8,
+            transparent_color=0x000000,
         )
 
         self._cards = [self._brewing_card, self._ready_card]

@@ -7,7 +7,8 @@ from utils.config import TIMING
 class TouchButton:
     # callback must be a callable, not the result of a call. Wrap with `lambda: ...`
     # at the call site if you need to pass arguments.
-    def __init__(self, x, y, image_path, display_group, callback=None, padding=10):
+    def __init__(self, x, y, image_path, display_group, callback=None, padding=10,
+                 transparent_color=None):
         self.image = displayio.OnDiskBitmap(image_path)
         self.x = x
         self.y = y
@@ -19,6 +20,12 @@ class TouchButton:
         # Safe width/height fallback (in case BMP metadata failed)
         self.width = getattr(self.image, "width", 200)
         self.height = getattr(self.image, "height", 200)
+
+        if transparent_color is not None:
+            try:
+                self.image.pixel_shader.make_transparent(transparent_color)
+            except (AttributeError, TypeError):
+                pass
 
         self.tilegrid = displayio.TileGrid(
             self.image,
