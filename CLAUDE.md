@@ -4,82 +4,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CircuitPython 9.2.8 firmware for a **Waveshare ESP32-S3 Touch LCD 2** (320x240 capacitive touch). It's a Slack-connected coffee gadget for the "Manchester-Brews" channel: announce brews, send emoji reactions, and log brew counts to a Google Sheet.
+CircuitPython 9.2.8 firmware for a **Waveshare ESP32-S3 Touch LCD 2** (320x240 capacitive touch). It's a Slack-connected coffee gadget for the "Manchester-Brews" channel: announce brews (Brewing / Ready), flag low beans, and log brew counts to a Google Sheet.
 
 There is no build step, no test suite, and no linter. Code runs on-device under CircuitPython.
+
+**The architectural reference is [`V2-ARCHITECTURE.md`](V2-ARCHITECTURE.md).** This file is a short orientation; that file is the long-form spec for modules, navigation flows, touch model, and decisions.
 
 ## Deploying / running
 
 The board mounts as a USB drive named `CIRCUITPY`. To deploy, copy the project files to that drive — `code.py` runs automatically on boot/save.
 
 - `code.py` is the entry point (CircuitPython runs it on boot).
-- `settings.toml` holds env vars read via `os.getenv(...)` (WiFi creds, Slack webhooks, Google Sheet URL). The board re-reads it on reset.
+- `settings.toml` holds env vars read via `os.getenv(...)` (WiFi creds, the single Slack webhook, Google Sheet URL, `LOW_BEANS_PERSON`). It is `.gitignore`d; `settings.example.toml` is the template.
 - `lib/` contains the bundled Adafruit `.mpy` modules — these must be deployed alongside the source.
+- `deploy.sh` is a macOS rsync watcher that mirrors the working tree to the mounted `CIRCUITPY` volume on save.
 - `boot_out.txt` is written by CircuitPython on boot; do not edit.
 - `sd/` is the SD card mount point; only `placeholder.txt` lives in the repo.
 
-To iterate: edit a file, save, the board auto-resets and reruns `code.py`. Use the serial console (e.g. `screen /dev/tty.usbmodem*` or Mu/Thonny) to see `print()` output and tracebacks.
+To iterate: edit a file, save (or run `deploy.sh`), the board auto-resets and reruns `code.py`. Use the serial console (e.g. `screen /dev/tty.usbmodem*` or Mu/Thonny) to see `print()` output and tracebacks.
 
-## Architecture
+## Architecture (short version)
 
-### Shared mutable state
+Modules at a glance — see `V2-ARCHITECTURE.md` for the full picture.
 
-`code.py` constructs one `app_state` dict and threads it everywhere. Two utility classes (`SendRequest`, `CoffeeCounter`) hold it on a **class attribute** rather than receiving it through method args:
-
-```python
-SendRequest.app_state = app_state
-CoffeeCounter.app_state = app_state
-```
-
-Treat these as singletons — there is one shared state and one HTTP session for the whole device. Don't instantiate them.
-
-`app_state` keys: `current_screen`, `last_brew_time`, `reset_react_options`, `wifi_connected`, `coffee_count`.
-
-### Screens and the main loop
-
-Each screen (`MenuScreen`, `BroadcastScreen`, `ReactScreen`) builds its `displayio.Group` once in `__init__` via `build()` and exposes `get_screen()`, `is_button_pressed(touch)`, `fire_button_callback(touch)`. `code.py` instantiates all screens up front and swaps the active one by reassigning `display.root_group` whenever `app_state["current_screen"]` changes.
-
-The main loop polls `ctp.touches` continuously and dispatches based on `current_screen`. It also runs a 5-second cadence that updates the WiFi indicator and attempts auto-reconnect on drop.
-
-To add a screen: build it in `code.py`, give it a string name in `app_state["current_screen"]`, add a dispatch branch in the touch loop, and add a branch in the screen-switching block that sets `display.root_group`.
-
-### Touch coordinate rotation
-
-The CST8xx driver returns raw touch coords that are rotated 90° relative to the display. Every hit-test in this codebase converts via:
-
-```python
-tx = raw_y
-ty = 240 - raw_x
-```
-
-`TouchButton.isPressed` does this internally. If you write a new hit-test (see `MenuScreen.isPlusOnePressed` / `isLowBeansPressed`), you must apply the same rotation — bitmap coordinates and touch coordinates do **not** share an axis.
-
-### Networking
-
-All HTTP goes through `utils/SendRequest.py`, which owns a single `adafruit_requests.Session` built from a shared socket pool. Every request closes connections and runs `gc.collect()` in a `finally` — memory is tight on the ESP32-S3 and leaked sockets cause subsequent requests to fail. Reuse `SendRequest.post/get`; do not create another session.
-
-`SendRequest` short-circuits to `None` when `app_state["wifi_connected"]` is False, so callers can call it unconditionally.
-
-### External integrations
-
-- **Slack**: each action posts to a separate Slack Workflow webhook URL. Webhook URLs live in `settings.toml`; the receiving workflow expects `{"messageContent": "..."}`. Adding a new emoji reaction = new webhook + new entry in `settings.toml` + new `os.getenv` read.
-- **Google Apps Script** (`google-apps-script.js`): the coffee log backend. `GET ?action=log` appends a timestamped row and returns `{count}`; bare `GET` returns `{count}`. Deploy instructions are in the file header. The deployed Web App URL goes into `settings.toml` as `GOOGLE_SHEET_URL`.
-
-### Bruno collection
-
-`bruno/BREWS-CHANNEL/` is a [Bruno](https://www.usebruno.com/) API client collection for exercising the Slack webhooks without flashing the device.
-
-## Git workflow
-
-See [GIT_WORKFLOW.md](GIT_WORKFLOW.md) for the full rules. Summary:
-
-- **One sub-task per branch**, cut from an up-to-date `main`. Naming: `type/short-kebab-description` (e.g. `feat/coffee-counter`, `fix/touch-rotation`).
-- **Small atomic commits**, Conventional Commits format: `type(scope): imperative subject`. Body only when the *why* is non-obvious.
-- Never stage `settings.toml` (live secrets) or `boot_out.txt` (boot churn). Name files explicitly — no `git add -A`.
-- Confirm with the user before `git push`, `git merge`, opening a PR, force-pushing, or rewriting shared history.
+- `code.py` — bootstrap + main loop only: WiFi connect, build display + touch, construct utilities, register screens, poll touches, tick the active screen, monitor WiFi.
+- `utils/Navigator.py` — screen registry. `register(name, screen)`, `navigate(name, params)`, `active`. Owns the "current screen" concept; replaces the old string-keyed if-chains.
+- `utils/touch.py` — single source of truth for touch. `normalize(raw)` does the 90° rotation; `TouchTracker.poll()` is edge-triggered (one event per physical press).
+- `utils/config.py` — constants only: `DISPLAY`, `COLOURS`, `TIMING`, `MESSAGES`, `IMAGES`. No behaviour.
+- `utils/layout.py` — text + position primitives (`make_text_label`, `get_text_width`, `truncate_to_width`, `split_title_lines`, `"center"` sentinel handling).
+- `utils/SendRequest.py` — single device-wide `adafruit_requests.Session`, injected via constructor. Methods return `(ok, body)` so callers can distinguish offline from failed.
+- `utils/CoffeeCounter.py` — Google Sheet brew log. Takes `SendRequest` + `AppState` via constructor.
+- `utils/slack.py` — dispatches per-action message templates to the single `SEND_MESSAGE_SLACK_WEBHOOK`.
+- `components/CardButton.py` — primary v2 button: rounded card, optional fill, BMP icon, label, non-blocking flash feedback.
+- `components/TouchButton.py` — small BMP-only button (used for the back button on the announcement screen).
+- `components/WifiIndicator.py` — kept but currently dormant on v2 screens (placement deferred).
+- `screens/HomeScreen.py` — three `CardButton`s: Send announcement, Low on beans, Log your intake.
+- `screens/AnnouncementScreen.py` — Brewing / Ready cards plus a small back button.
+- `screens/SuccessScreen.py` — reusable confirmation screen; `on_enter(params)` accepts `message`, `image_path`, `return_to`, `duration`; `tick(now)` dismisses on timer.
+- `screens/NoConnectionScreen.py` — full-screen offline state with reconnect polling; auto-navigates home when WiFi recovers.
 
 ## Things to know before editing
 
-- **`ReactScreen` is currently disabled** — imports, instantiation, and dispatch are commented out in `code.py`. It also has a latent bug: `TouchButton(..., callback=SendRequest.post(WEBHOOK_URL))` *invokes* `post` at construction time instead of passing a callable, so re-enabling it as-is would fire every webhook on screen build. Fix by passing `lambda: SendRequest.post(WEBHOOK_URL)` (or equivalent) before re-enabling.
-- **CircuitPython, not CPython.** No `asyncio` assumptions, no `typing` annotations on the device, prefer string concatenation over f-strings in tight memory paths (the codebase mixes both — match the surrounding style). Imports like `wifi`, `board`, `displayio`, `terminalio`, `microcontroller` only resolve on-device.
-- **`settings.toml` contains live secrets** (WiFi password, Slack webhook URLs). The repo currently has no `.gitignore` and no commits — do not push without addressing this first.
+- **All hit-tests go through `utils.touch.normalize`.** Never inline the `tx = raw_y; ty = 240 - raw_x` rotation — that duplication is exactly what v2 deleted.
+- **Touch dispatch is edge-triggered via `utils.touch.TouchTracker`.** Call `tracker.poll()` once per loop iteration; do not poll `ctp.touches` (or `ctp.touched`) directly in screens or components.
+- **Visual feedback is non-blocking.** `card.flash(now)` records a timestamp; `card.tick(now)` clears it when the window expires. **No `time.sleep` for UI feedback** — v1's blocking sleeps froze the UI and dropped touches.
+- **HTTP goes through one injected `SendRequest` instance.** Reuse the instance passed in via constructor; do not build another `Session`. Methods return `(ok, body)`; check `ok` before reading `body`.
+- **Screens implement the Navigator protocol.** Each screen exposes `get_group()`, `on_enter(params)`, `handle_touch(touch)`, and `tick(now)`. Screens hold a navigator reference and call `self.navigator.navigate("home")` themselves — `code.py` does not branch on screen names.
+- **Tap debounce is enforced at the button level.** Both `CardButton.fire` and `TouchButton.fire` gate on `TIMING["tap_debounce"]` (300 ms). Belt-and-braces on top of edge-triggered detection.
+- **Settings are gitignored.** `settings.toml` carries live secrets and is excluded from git; `settings.example.toml` is the committed template. Never stage `settings.toml` or `boot_out.txt`. Name files explicitly when staging — no `git add -A`.
+- **CircuitPython, not CPython.** No `asyncio` assumptions, no `typing` annotations on-device, prefer string concatenation over f-strings in tight memory paths (the codebase mixes both — match the surrounding style). Imports like `wifi`, `board`, `displayio`, `terminalio`, `microcontroller` only resolve on-device.
+
+## Known gaps / deferred features
+
+These are intentionally not yet built; see `V2-ARCHITECTURE.md` §11 "Deferred" for the full list.
+
+- **`WifiIndicator` placement** — the component exists but is not wired into v2 screens; connectivity is communicated via `NoConnectionScreen` instead.
+- **Stats screen** — `Coffee → MCR → Stats` flow is on the roadmap but not built.
+- **Milestone messages** for "Log your intake" (e.g. nth-cup callouts).
+- **React / emoji flow** — removed in v2; can return as a future feature.
+
+## Git workflow
+
+See [`GIT_WORKFLOW.md`](GIT_WORKFLOW.md) for the full rules. Summary:
+
+- **One sub-task per branch**, cut from an up-to-date `main`. Naming: `type/short-kebab-description` (e.g. `feat/home-screen`, `fix/touch-debounce`).
+- **Small atomic commits**, Conventional Commits format: `type(scope): imperative subject`. Body only when the *why* is non-obvious.
+- Never stage `settings.toml` or `boot_out.txt`. Name files explicitly — no `git add -A`.
+- Confirm with the user before `git push`, `git merge`, opening a PR, force-pushing, or rewriting shared history.
