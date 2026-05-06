@@ -18,9 +18,6 @@ class MenuScreen:
         self.BroadcastButton = None
         self.PlusOneButton = None
         self.status_label = None
-        self.temp_label = None
-        self.weather_label = None
-        self.rain_label = None
         self.count_label = None
         self.wifi_indicator = None
         self.last_plus_one_time = 0
@@ -117,24 +114,6 @@ class MenuScreen:
 
         self.BroadcastButton = TouchButton(25, 85, "/images/broadcast.bmp", self.screen_group, self.openBroadcastScreen)
 
-        weather_bg = RoundRect(160, 58, 90, 60, 8, fill=0x001830, outline=0x2266AA, stroke=2)
-        self.screen_group.append(weather_bg)
-
-        self.temp_label = label.Label(terminalio.FONT, text="", scale=2, color=0xFFFF00)
-        self.temp_label.x = 165
-        self.temp_label.y = 74
-        self.screen_group.append(self.temp_label)
-
-        self.weather_label = label.Label(terminalio.FONT, text="", scale=1, color=0xADD8E6)
-        self.weather_label.x = 165
-        self.weather_label.y = 91
-        self.screen_group.append(self.weather_label)
-
-        self.rain_label = label.Label(terminalio.FONT, text="", scale=1, color=0x87CEEB)
-        self.rain_label.x = 165
-        self.rain_label.y = 104
-        self.screen_group.append(self.rain_label)
-
         bean_btn_x = 255
         bean_btn_y = 58
         bean_btn_w = 60
@@ -197,24 +176,10 @@ class MenuScreen:
 
     def updateStatus(self):
         self.setDefaultStatus()
-        self.updateWeather()
         self.updateCoffeeCount()
 
     def get_screen(self):
         return self.screen_group
-    
-    def updateWeather(self):
-        temp = self.app_state.get("weather_temp", None)
-        condition = self.app_state.get("weather_condition", None)
-        rain = self.app_state.get("weather_rain_chance", None)
-        if temp is not None and condition is not None:
-            self.temp_label.text = str(round(temp, 1)) + "C"
-            self.weather_label.text = condition
-            self.rain_label.text = ("Rain: " + str(rain) + "%") if rain is not None else ""
-        else:
-            self.temp_label.text = ""
-            self.weather_label.text = "No weather"
-            self.rain_label.text = ""
 
     def updateCoffeeCount(self):
         count = self.app_state.get("coffee_count", 0)

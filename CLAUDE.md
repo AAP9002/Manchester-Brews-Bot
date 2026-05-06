@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-CircuitPython 9.2.8 firmware for a **Waveshare ESP32-S3 Touch LCD 2** (320x240 capacitive touch). It's a Slack-connected coffee gadget for the "Manchester-Brews" channel: announce brews, send emoji reactions, log brew counts to a Google Sheet, and show local weather.
+CircuitPython 9.2.8 firmware for a **Waveshare ESP32-S3 Touch LCD 2** (320x240 capacitive touch). It's a Slack-connected coffee gadget for the "Manchester-Brews" channel: announce brews, send emoji reactions, and log brew counts to a Google Sheet.
 
 There is no build step, no test suite, and no linter. Code runs on-device under CircuitPython.
 
@@ -13,7 +13,7 @@ There is no build step, no test suite, and no linter. Code runs on-device under 
 The board mounts as a USB drive named `CIRCUITPY`. To deploy, copy the project files to that drive — `code.py` runs automatically on boot/save.
 
 - `code.py` is the entry point (CircuitPython runs it on boot).
-- `settings.toml` holds env vars read via `os.getenv(...)` (WiFi creds, Slack webhooks, Google Sheet URL, weather lat/lon). The board re-reads it on reset.
+- `settings.toml` holds env vars read via `os.getenv(...)` (WiFi creds, Slack webhooks, Google Sheet URL). The board re-reads it on reset.
 - `lib/` contains the bundled Adafruit `.mpy` modules — these must be deployed alongside the source.
 - `boot_out.txt` is written by CircuitPython on boot; do not edit.
 - `sd/` is the SD card mount point; only `placeholder.txt` lives in the repo.
@@ -24,23 +24,22 @@ To iterate: edit a file, save, the board auto-resets and reruns `code.py`. Use t
 
 ### Shared mutable state
 
-`code.py` constructs one `app_state` dict and threads it everywhere. Three utility classes (`SendRequest`, `CoffeeCounter`, `WeatherManager`) hold it on a **class attribute** rather than receiving it through method args:
+`code.py` constructs one `app_state` dict and threads it everywhere. Two utility classes (`SendRequest`, `CoffeeCounter`) hold it on a **class attribute** rather than receiving it through method args:
 
 ```python
 SendRequest.app_state = app_state
 CoffeeCounter.app_state = app_state
-WeatherManager.app_state = app_state
 ```
 
 Treat these as singletons — there is one shared state and one HTTP session for the whole device. Don't instantiate them.
 
-`app_state` keys: `current_screen`, `last_brew_time`, `reset_react_options`, `wifi_connected`, `coffee_count`, `weather_temp`, `weather_condition`, `weather_rain_chance`.
+`app_state` keys: `current_screen`, `last_brew_time`, `reset_react_options`, `wifi_connected`, `coffee_count`.
 
 ### Screens and the main loop
 
 Each screen (`MenuScreen`, `BroadcastScreen`, `ReactScreen`) builds its `displayio.Group` once in `__init__` via `build()` and exposes `get_screen()`, `is_button_pressed(touch)`, `fire_button_callback(touch)`. `code.py` instantiates all screens up front and swaps the active one by reassigning `display.root_group` whenever `app_state["current_screen"]` changes.
 
-The main loop polls `ctp.touches` continuously and dispatches based on `current_screen`. It also runs a 5-second cadence that updates the WiFi indicator, attempts auto-reconnect on drop, and refreshes weather every 10 minutes.
+The main loop polls `ctp.touches` continuously and dispatches based on `current_screen`. It also runs a 5-second cadence that updates the WiFi indicator and attempts auto-reconnect on drop.
 
 To add a screen: build it in `code.py`, give it a string name in `app_state["current_screen"]`, add a dispatch branch in the touch loop, and add a branch in the screen-switching block that sets `display.root_group`.
 
@@ -65,7 +64,6 @@ All HTTP goes through `utils/SendRequest.py`, which owns a single `adafruit_requ
 
 - **Slack**: each action posts to a separate Slack Workflow webhook URL. Webhook URLs live in `settings.toml`; the receiving workflow expects `{"messageContent": "..."}`. Adding a new emoji reaction = new webhook + new entry in `settings.toml` + new `os.getenv` read.
 - **Google Apps Script** (`google-apps-script.js`): the coffee log backend. `GET ?action=log` appends a timestamped row and returns `{count}`; bare `GET` returns `{count}`. Deploy instructions are in the file header. The deployed Web App URL goes into `settings.toml` as `GOOGLE_SHEET_URL`.
-- **Open-Meteo** (`utils/WeatherManager.py`): no API key; uses `WEATHER_LAT`/`WEATHER_LON` from settings. WMO weather codes are mapped to short condition strings in `_WMO_CONDITIONS`.
 
 ### Bruno collection
 
@@ -75,7 +73,7 @@ All HTTP goes through `utils/SendRequest.py`, which owns a single `adafruit_requ
 
 See [GIT_WORKFLOW.md](GIT_WORKFLOW.md) for the full rules. Summary:
 
-- **One sub-task per branch**, cut from an up-to-date `main`. Naming: `type/short-kebab-description` (e.g. `feat/weather-cache`, `fix/touch-rotation`).
+- **One sub-task per branch**, cut from an up-to-date `main`. Naming: `type/short-kebab-description` (e.g. `feat/coffee-counter`, `fix/touch-rotation`).
 - **Small atomic commits**, Conventional Commits format: `type(scope): imperative subject`. Body only when the *why* is non-obvious.
 - Never stage `settings.toml` (live secrets) or `boot_out.txt` (boot churn). Name files explicitly — no `git add -A`.
 - Confirm with the user before `git push`, `git merge`, opening a PR, force-pushing, or rewriting shared history.

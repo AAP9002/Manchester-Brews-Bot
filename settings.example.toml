@@ -11,6 +11,3 @@ GOOGLE_SHEET_URL = ""
 # Person responsible for refilling beans; substituted into the
 # Low-on-beans success message. Defaults to "Someone" if unset.
 LOW_BEANS_PERSON = ""
-
-WEATHER_LAT = ""
-WEATHER_LON = ""
